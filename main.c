@@ -43,33 +43,32 @@
 #define ROW_5 0x80
 #define ROW_6 0x8000000
 #define ROW_7 0x20000000
+#define DIRECTION_RIGHT 0
+#define DIRECTION_LEFT 1
+#define DIRECTION_DOWN 2
+#define DIRECTION_UP 3
 #define CLEAR_ROW 0X0
 static int i = 0;
 int x=2;
 int y=15;
-int direction_change=0;
+int direction_change=-1;
 #define GPIO_PIN_MASK	0x1Fu
 #define GPIO_PIN(x)		(((1)<<(x & GPIO_PIN_MASK)))
 void delay(uint64_t bound) {
 	for (uint64_t i=0; i < bound; i++) { __NOP(); }
 }
 
-void MCUInit(void)  {
+void MCU_Init(void)  {
 	MCG->C4 |= ( MCG_C4_DMX32_MASK | MCG_C4_DRST_DRS(0x01) );
 	SIM->CLKDIV1 |= SIM_CLKDIV1_OUTDIV1(0x00);
 	WDOG_STCTRLH &= ~WDOG_STCTRLH_WDOGEN_MASK;
 }
-void PORTSinit(void){
-	SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK | SIM_SCGC5_PORTE_MASK | SIM_SCGC5_PORTA_MASK;
-	PORTB->PCR[5] =  PORT_PCR_MUX(0x01);
-	PORTE->PCR[12] =   ( PORT_PCR_ISF(0x01)
-			| PORT_PCR_IRQC(0x0A)
-			| PORT_PCR_MUX(0x01)
-			| PORT_PCR_PE(0x01)
-			| PORT_PCR_PS(0x01));
-	PORTE->PCR[10] =  ( PORT_PCR_ISF(0x01)| PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01)| PORT_PCR_PE(0x01)| PORT_PCR_PS(0x01));
-	PORTE->PCR[27] =  ( PORT_PCR_ISF(0x01)| PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01)| PORT_PCR_PE(0x01)| PORT_PCR_PS(0x01));
-	PORTE->PCR[26] =  ( PORT_PCR_ISF(0x01)| PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01)| PORT_PCR_PE(0x01)| PORT_PCR_PS(0x01));
+void PORTS_Init(void){
+	SIM->SCGC5 |= SIM_SCGC5_PORTE_MASK | SIM_SCGC5_PORTA_MASK;
+	PORTE->PCR[10] =  ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01) | PORT_PCR_PE(0x01) | PORT_PCR_PS(0x01));
+	PORTE->PCR[12] =   ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01) | PORT_PCR_PE(0x01) | PORT_PCR_PS(0x01));
+	PORTE->PCR[27] =  ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01)| PORT_PCR_PE(0x01)| PORT_PCR_PS(0x01));
+	PORTE->PCR[26] =  ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01)| PORT_PCR_PE(0x01)| PORT_PCR_PS(0x01));
 
 	PORTA->PCR[8] = ( 0|PORT_PCR_MUX(0x01) );
 	PORTA->PCR[10] = ( 0|PORT_PCR_MUX(0x01) );
@@ -87,12 +86,10 @@ void PORTSinit(void){
 
 	PORTE->PCR[28] = ( 0|PORT_PCR_MUX(0x01) );
 
-    PTA->PDDR =  GPIO_PDDR_PDD(0x0010);
-    PTB->PDDR =  GPIO_PDDR_PDD(0x3C);
-	PTB->PDOR |= GPIO_PDOR_PDO(0x3C);
 	PTA->PDDR = GPIO_PDDR_PDD(0x3F000FC0);
 	PTE->PDDR = GPIO_PDDR_PDD( GPIO_PIN(28) );
 }
+
 void column_select(unsigned int col_num)
 {
 	unsigned i, result, col_sel[4];
@@ -125,6 +122,7 @@ void column_select(unsigned int col_num)
 		}
 	}
 }
+
 void change_cell(int value){
 	if(value > 7){
 		value-=8;
@@ -158,6 +156,7 @@ void change_cell(int value){
 				break;
 	}
 }
+
 void changing_animation(int direction, int  value, int reverse){
 
 	switch(direction){
@@ -173,7 +172,7 @@ void changing_animation(int direction, int  value, int reverse){
 					column_select(y);
 					change_cell(x+(1*reverse));
 					delay(5000);
-					direction_change=0;
+					direction_change=-1;
 				}
 			for(int a=0; a < 20; a++){
 					PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
@@ -186,7 +185,7 @@ void changing_animation(int direction, int  value, int reverse){
 					change_cell(x);
 					column_select(y);
 					delay(5000);
-					direction_change=0;
+					direction_change=-1;
 				}
 			break;
 		case 1:
@@ -201,7 +200,7 @@ void changing_animation(int direction, int  value, int reverse){
 					change_cell(x+(1*value));
 					column_select(y);
 					delay(5000);
-					direction_change=0;
+					direction_change=-1;
 				}
 			for(int a=0; a < 20; a++){
 					PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
@@ -214,19 +213,20 @@ void changing_animation(int direction, int  value, int reverse){
 					change_cell(x);
 					column_select(y);
 					delay(5000);
-					direction_change=0;
+					direction_change=-1;
 				}
 			break;
 		default:
 			break;
 	}
 }
+
 void move_snake(int direction){
 		PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
 
 		switch(direction){
-				case 0:
-					if (direction_change==2){
+				case DIRECTION_RIGHT:
+					if (direction_change==DIRECTION_DOWN){
 							changing_animation(0, -1, 1);
 						if(x== 7){
 							x=1;
@@ -235,7 +235,7 @@ void move_snake(int direction){
 						}else{
 							x+=2;
 						}
-					}else if(direction_change== 3){
+					}else if(direction_change== DIRECTION_UP){
 							changing_animation(0, 1, 1);
 							if(x== 7){
 								x=1;
@@ -270,8 +270,8 @@ void move_snake(int direction){
 						x+=1;
 					}
 					break;
-				case 1:
-					if (direction_change==2){
+				case DIRECTION_LEFT:
+					if (direction_change==DIRECTION_DOWN){
 						changing_animation(0, -1, -1);
 						if(x== 0){
 							x=6;
@@ -280,11 +280,11 @@ void move_snake(int direction){
 						}else{
 							x-=2;
 						}
-					}else if(direction_change== 3){
+					}else if(direction_change == DIRECTION_UP){
 						changing_animation(0, 1, -1);
 							if(x== 0){
 								x=6;
-							}else if(x==0){
+							}else if(x==1){
 								x=7;
 							}else{
 								x-=2;
@@ -315,8 +315,8 @@ void move_snake(int direction){
 						x-=1;
 					}
 					break;
-				case 2:
-						if (direction_change==-1){
+				case DIRECTION_DOWN:
+						if (direction_change==DIRECTION_LEFT){
 							changing_animation(1, 1, 1);
 							if(y== 15){
 								y=1;
@@ -325,7 +325,7 @@ void move_snake(int direction){
 							}else{
 								y+=2;
 							}
-						}else if(direction_change== 1){
+						}else if(direction_change== DIRECTION_RIGHT){
 							changing_animation(1, -1, 1);
 								if(y== 15){
 									y=1;
@@ -375,8 +375,8 @@ void move_snake(int direction){
 					}
 
 					break;
-				case 3:
-					if (direction_change==-1){
+				case DIRECTION_UP:
+					if (direction_change==DIRECTION_LEFT){
 						changing_animation(1, 1, -1);
 						PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
 						if(y== 1){
@@ -386,7 +386,7 @@ void move_snake(int direction){
 						}else{
 							y-=2;
 						}
-					}else if(direction_change== 1){
+					}else if(direction_change== DIRECTION_RIGHT){
 						changing_animation(1, -1, -1);
 							PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
 							if(y== 1){
@@ -445,11 +445,8 @@ void move_snake(int direction){
 int main(void)
 {
 
-    /* Write your code here */
-
-
-	MCUInit();
-	PORTSinit();
+	MCU_Init();
+	PORTS_Init();
 	int a=0;
 	int direction=0;
 	while(1){
@@ -461,36 +458,36 @@ int main(void)
 				delay(300000);
 		}
 	 if (PORTE->ISFR & BUTTON_DOWN_MASK){
-		 	 if(direction == 0){
-		 		 direction_change=1;
-		 	 }else if(direction == 1){
-		 		direction_change = -1;
+		 	 if(direction == DIRECTION_RIGHT){
+		 		 direction_change=DIRECTION_RIGHT;
+		 	 }else if(direction == DIRECTION_LEFT){
+		 		direction_change = DIRECTION_LEFT;
 		 	 }
-		 	 direction=2;
+		 	 direction=DIRECTION_DOWN;
 		 }
 		 if (PORTE->ISFR & BUTTON_LEFT_MASK){
-		 	 if(direction == 2){
-		 		 direction_change=2;
-		 	 }else if(direction == 3){
-		 		direction_change = 3;
+		 	 if(direction == DIRECTION_DOWN){
+		 		 direction_change=DIRECTION_DOWN;
+		 	 }else if(direction == DIRECTION_UP){
+		 		direction_change = DIRECTION_UP;
 		 	 }
-		 	 direction=1;
+		 	 direction=DIRECTION_LEFT;
 		 }
 		 if (PORTE->ISFR & BUTTON_UP_MASK){
-		 	 if(direction == 0){
-		 		 direction_change=1;
-		 	 }else if(direction == 1){
-		 		direction_change = -1;
+		 	 if(direction == DIRECTION_RIGHT){
+		 		 direction_change=DIRECTION_RIGHT;
+		 	 }else if(direction == DIRECTION_LEFT){
+		 		direction_change = DIRECTION_LEFT;
 		 	 }
-		 	 direction=3;
+		 	 direction=DIRECTION_UP;
 		 }
 		 if (PORTE->ISFR & BUTTON_RIGHT_MASK){
-		 	 if(direction == 2){
-		 		 direction_change=2;
-		 	 }else if(direction == 3){
-		 		direction_change = 3;
+		 	 if(direction == DIRECTION_DOWN){
+		 		 direction_change=DIRECTION_DOWN;
+		 	 }else if(direction == DIRECTION_UP){
+		 		direction_change = DIRECTION_UP;
 		 	 }
-		 	 direction=0;
+		 	 direction=DIRECTION_RIGHT;
 		 }
 		PORTE->ISFR = BUTTON_UP_MASK | BUTTON_LEFT_MASK | BUTTON_DOWN_MASK | BUTTON_RIGHT_MASK;
 
