@@ -29,29 +29,46 @@
  */
 
 #include "MK60D10.h"
+#include <time.h>
+#include <stdlib.h>
 #define BUTTON_UP_MASK 0x4000000
 #define BUTTON_LEFT_MASK 0x8000000
 #define BUTTON_DOWN_MASK 0x1000
 #define BUTTON_RIGHT_MASK 0x400
-#define PIEZZO_MASK 0x2000
-#define LED_R_MASK 0x20
-#define ROW_0 0x4000000
-#define ROW_1 0x1000000
-#define ROW_2 0x200
-#define ROW_3 0x2000000
-#define ROW_4 0x10000000
-#define ROW_5 0x80
-#define ROW_6 0x8000000
-#define ROW_7 0x20000000
 #define DIRECTION_RIGHT 0
 #define DIRECTION_LEFT 1
 #define DIRECTION_DOWN 2
 #define DIRECTION_UP 3
 #define CLEAR_ROW 0X0
+#define SIZE_SNAKE 6
 static int i = 0;
+int current_size=SIZE_SNAKE;
 int x=2;
 int y=15;
-int direction_change=-1;
+struct snake{
+	int x;
+	int y;
+};
+struct snake body_arr[SIZE_SNAKE];
+void Init_Snake(){
+	int tmp_x;
+	int tmp_y;
+	for(int i=0; i<SIZE_SNAKE; i++){
+		if(i == 0){
+			body_arr[0].x=2;
+			body_arr[0].y=15;
+		}else{
+			if(x-i <0){
+				int tmp= x-i;
+				tmp_x=8-tmp;
+			}else{
+				tmp_x=x-i;
+			}
+			body_arr[i].x=tmp_x;
+			body_arr[i].y=y;
+		}
+	}
+}
 #define GPIO_PIN_MASK	0x1Fu
 #define GPIO_PIN(x)		(((1)<<(x & GPIO_PIN_MASK)))
 void delay(uint64_t bound) {
@@ -66,9 +83,9 @@ void MCU_Init(void)  {
 void PORTS_Init(void){
 	SIM->SCGC5 |= SIM_SCGC5_PORTE_MASK | SIM_SCGC5_PORTA_MASK;
 	PORTE->PCR[10] =  ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01) | PORT_PCR_PE(0x01) | PORT_PCR_PS(0x01));
-	PORTE->PCR[12] =   ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01) | PORT_PCR_PE(0x01) | PORT_PCR_PS(0x01));
-	PORTE->PCR[27] =  ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01)| PORT_PCR_PE(0x01)| PORT_PCR_PS(0x01));
-	PORTE->PCR[26] =  ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01)| PORT_PCR_PE(0x01)| PORT_PCR_PS(0x01));
+	PORTE->PCR[12] =  ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01) | PORT_PCR_PE(0x01) | PORT_PCR_PS(0x01));
+	PORTE->PCR[27] =  ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01) | PORT_PCR_PE(0x01) | PORT_PCR_PS(0x01));
+	PORTE->PCR[26] =  ( PORT_PCR_ISF(0x01) | PORT_PCR_IRQC(0x0A) | PORT_PCR_MUX(0x01) | PORT_PCR_PE(0x01) | PORT_PCR_PS(0x01));
 
 	PORTA->PCR[8] = ( 0|PORT_PCR_MUX(0x01) );
 	PORTA->PCR[10] = ( 0|PORT_PCR_MUX(0x01) );
@@ -124,330 +141,109 @@ void column_select(unsigned int col_num)
 }
 
 void change_cell(int value){
-	if(value > 7){
-		value-=8;
-	}else if(value < 0){
-		value+=8;
-	}
 	switch(value){
-			case 7:
-				PTA->PDOR |= GPIO_PDOR_PDO(ROW_0);
-				break;
-			case 6:
-				PTA->PDOR |= GPIO_PDOR_PDO(ROW_1);
-				break;
-			case 5:
-				PTA->PDOR |= GPIO_PDOR_PDO(ROW_2);
-				break;
-			case 4:
-				PTA->PDOR |= GPIO_PDOR_PDO(ROW_3);
-				break;
-			case 3:
-				PTA->PDOR |= GPIO_PDOR_PDO(ROW_4);
-				break;
-			case 2:
-				PTA->PDOR |= GPIO_PDOR_PDO(ROW_5);
+			case 0:
+	            PTA->PDOR |= GPIO_PDOR_PDO( GPIO_PIN(29));
 				break;
 			case 1:
-				PTA->PDOR |= GPIO_PDOR_PDO(ROW_6);
+	            PTA->PDOR |= GPIO_PDOR_PDO( GPIO_PIN(27));
 				break;
-			case 0:
-				PTA->PDOR |= GPIO_PDOR_PDO(ROW_7);
+			case 2:
+	            PTA->PDOR |= GPIO_PDOR_PDO( GPIO_PIN(7));
+				break;
+			case 3:
+	            PTA->PDOR |= GPIO_PDOR_PDO( GPIO_PIN(28));
+				break;
+			case 4:
+	            PTA->PDOR |= GPIO_PDOR_PDO( GPIO_PIN(25));
+				break;
+			case 5:
+	            PTA->PDOR |= GPIO_PDOR_PDO( GPIO_PIN(9));
+				break;
+			case 6:
+	            PTA->PDOR |= GPIO_PDOR_PDO( GPIO_PIN(24));
+				break;
+			case 7:
+	            PTA->PDOR |= GPIO_PDOR_PDO( GPIO_PIN(26));
 				break;
 	}
 }
-
-void changing_animation(int direction, int  value, int reverse){
-
-	switch(direction){
-		case 0:
-			for(int a=0; a < 20; a++){
-					PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
-					column_select(y+(1*value));
-					change_cell(x);
-					delay(5000);
-					change_cell(x);
-					column_select(y);
-					delay(5000);
-					column_select(y);
-					change_cell(x+(1*reverse));
-					delay(5000);
-					direction_change=-1;
-				}
-			for(int a=0; a < 20; a++){
-					PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
-					column_select(y);
-					change_cell(x+(2*reverse));
-					delay(5000);
-					change_cell(x+(1*reverse));
-					column_select(y);
-					delay(5000);
-					change_cell(x);
-					column_select(y);
-					delay(5000);
-					direction_change=-1;
-				}
-			break;
-		case 1:
-			for(int a=0; a < 20; a++){
-					PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
-					column_select(y+(1*reverse));
-					change_cell(x);
-					delay(5000);
-					change_cell(x);
-					column_select(y);
-					delay(5000);
-					change_cell(x+(1*value));
-					column_select(y);
-					delay(5000);
-					direction_change=-1;
-				}
-			for(int a=0; a < 20; a++){
-					PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
-					column_select(y+(2*reverse));
-					change_cell(x);
-					delay(5000);
-					change_cell(x);
-					column_select(y+(1*reverse));
-					delay(5000);
-					change_cell(x);
-					column_select(y);
-					delay(5000);
-					direction_change=-1;
-				}
-			break;
-		default:
-			break;
-	}
-}
-
 void move_snake(int direction){
-		PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
-
 		switch(direction){
 				case DIRECTION_RIGHT:
-					if (direction_change==DIRECTION_DOWN){
-							changing_animation(0, -1, 1);
-						if(x== 7){
-							x=1;
-						}else if(x==6){
-							x=0;
-						}else{
-							x+=2;
-						}
-					}else if(direction_change== DIRECTION_UP){
-							changing_animation(0, 1, 1);
-							if(x== 7){
-								x=1;
-							}else if(x==6){
-								x=0;
-							}else{
-								x+=2;
+					for(int i=SIZE_SNAKE-1; i>=0; i--){
+						if(i == 0){
+							body_arr[i].x+=1;
+							if(body_arr[i].x == 8){
+								body_arr[i].x=0;
 							}
-
-					}
-					PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
-					if(x==0){
-						x+=1;
-						column_select(y);
-						change_cell(1);
-						change_cell(0);
-						change_cell(7);
-						break;
-					}
-					if(x == 7){
-						x=0;
-						column_select(y);
-						change_cell(0);
-						change_cell(7);
-						change_cell(6);
-					}
-					else{
-						column_select(y);
-						change_cell(x+1);
-						change_cell(x);
-						change_cell(x-1);
-						x+=1;
+						}else{
+							body_arr[i].x=body_arr[i-1].x;
+							body_arr[i].y=body_arr[i-1].y;
+						}
 					}
 					break;
 				case DIRECTION_LEFT:
-					if (direction_change==DIRECTION_DOWN){
-						changing_animation(0, -1, -1);
-						if(x== 0){
-							x=6;
-						}else if(x==1){
-							x=7;
-						}else{
-							x-=2;
-						}
-					}else if(direction_change == DIRECTION_UP){
-						changing_animation(0, 1, -1);
-							if(x== 0){
-								x=6;
-							}else if(x==1){
-								x=7;
-							}else{
-								x-=2;
+					for(int i=SIZE_SNAKE-1; i>=0; i--){
+						if(i == 0){
+							body_arr[i].x-=1;
+							if(body_arr[i].x == -1){
+								body_arr[i].x=7;
 							}
-
-					}
-					PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
-					if(x==0){
-						x=7;
-						column_select(y);
-						change_cell(1);
-						change_cell(0);
-						change_cell(7);
-						break;
-					}
-					if(x == 7){
-						x-=1;
-						column_select(y);
-						change_cell(0);
-						change_cell(7);
-						change_cell(6);
-					}
-					else{
-						column_select(y);
-						change_cell(x+1);
-						change_cell(x);
-						change_cell(x-1);
-						x-=1;
+						}else{
+							body_arr[i].x=body_arr[i-1].x;
+							body_arr[i].y=body_arr[i-1].y;
+						}
 					}
 					break;
 				case DIRECTION_DOWN:
-						if (direction_change==DIRECTION_LEFT){
-							changing_animation(1, 1, 1);
-							if(y== 15){
-								y=1;
-							}else if(y==14){
-								y=0;
-							}else{
-								y+=2;
+					for(int i=SIZE_SNAKE-1; i>=0; i--){
+						if(i == 0){
+							body_arr[i].y+=1;
+							if(body_arr[i].y == 16){
+								body_arr[i].y=0;
 							}
-						}else if(direction_change== DIRECTION_RIGHT){
-							changing_animation(1, -1, 1);
-								if(y== 15){
-									y=1;
-								}else if(y==14){
-									y=0;
-								}else{
-									y+=2;
-								}
-
-						}
-					if(y==15){
-						y=0;
-						for(int a=0; a < 20; a++){
-							change_cell(x);
-							column_select(15);
-							delay(5000);
-							column_select(14);
-							delay(5000);
-							column_select(0);
-							delay(5000);
-						}
-						break;
-					}
-					if(y == 0){
-						y+=1;
-						for(int a=0; a < 20; a++){
-						change_cell(x);
-						column_select(0);
-						delay(5000);
-						column_select(15);
-						delay(5000);
-						column_select(1);
-						delay(5000);
+						}else{
+							body_arr[i].x=body_arr[i-1].x;
+							body_arr[i].y=body_arr[i-1].y;
 						}
 					}
-					else{
-						for(int a=0; a < 20; a++){
-						change_cell(x);
-						column_select(y+1);
-						delay(5000);
-						column_select(y);
-						delay(5000);
-						column_select(y-1);
-						delay(5000);
-						}
-						y+=1;
-					}
-
 					break;
 				case DIRECTION_UP:
-					if (direction_change==DIRECTION_LEFT){
-						changing_animation(1, 1, -1);
-						PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
-						if(y== 1){
-							y=15;
-						}else if(y==0){
-							y=14;
-						}else{
-							y-=2;
-						}
-					}else if(direction_change== DIRECTION_RIGHT){
-						changing_animation(1, -1, -1);
-							PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
-							if(y== 1){
-								y=15;
-							}else if(y==0){
-								y=14;
-							}else{
-								y-=2;
+					for(int i=SIZE_SNAKE-1; i>=0; i--){
+						if(i == 0){
+							body_arr[i].y-=1;
+							if(body_arr[i].y == -1){
+								body_arr[i].y=15;
 							}
-
-					}
-					if(y==0){
-						y=15;
-						for(int a=0; a < 20; a++){
-							change_cell(x);
-							column_select(15);
-							delay(5000);
-							column_select(0);
-							delay(5000);
-							column_select(1);
-							delay(5000);
+						}else{
+							body_arr[i].x=body_arr[i-1].x;
+							body_arr[i].y=body_arr[i-1].y;
 						}
-						break;
-					}
-					if(y == 15){
-						y-=1;
-						for(int a=0; a < 20; a++){
-						change_cell(x);
-						column_select(14);
-						delay(5000);
-						column_select(15);
-						delay(5000);
-						column_select(0);
-						delay(5000);
-						}
-					}
-					else{
-						for(int a=0; a < 20; a++){
-						change_cell(x);
-						column_select(y+1);
-						delay(5000);
-						column_select(y);
-						delay(5000);
-						column_select(y-1);
-						delay(5000);
-						}
-						y-=1;
 					}
 					break;
 				default:
 					break;
 		}
-}
+		for(int a=0; a <12; a++){
+			for(int i= 0; i< SIZE_SNAKE; i++){
+				column_select(body_arr[i].y);
+				change_cell(body_arr[i].x);
+	            PTE->PDDR &= ~GPIO_PDDR_PDD( GPIO_PIN(28) );
+				delay(5000);
+	            PTE->PDOR |= GPIO_PDOR_PDO( GPIO_PIN(28));
+	        	PTA->PDOR &= GPIO_PDOR_PDO(CLEAR_ROW);
+			}
 
+		}
+}
 
 int main(void)
 {
 
 	MCU_Init();
 	PORTS_Init();
-	int a=0;
+	Init_Snake();
 	int direction=0;
 	while(1){
 		if(direction == 2 || direction ==3){
@@ -455,39 +251,27 @@ int main(void)
 		}
 		if(direction == 0 || direction == 1){
 				move_snake(direction);
-				delay(300000);
+
 		}
 	 if (PORTE->ISFR & BUTTON_DOWN_MASK){
-		 	 if(direction == DIRECTION_RIGHT){
-		 		 direction_change=DIRECTION_RIGHT;
-		 	 }else if(direction == DIRECTION_LEFT){
-		 		direction_change = DIRECTION_LEFT;
+		 	 if(direction != DIRECTION_UP){
+		 		 direction=DIRECTION_DOWN;
 		 	 }
-		 	 direction=DIRECTION_DOWN;
 		 }
 		 if (PORTE->ISFR & BUTTON_LEFT_MASK){
-		 	 if(direction == DIRECTION_DOWN){
-		 		 direction_change=DIRECTION_DOWN;
-		 	 }else if(direction == DIRECTION_UP){
-		 		direction_change = DIRECTION_UP;
-		 	 }
-		 	 direction=DIRECTION_LEFT;
+			 if(direction != DIRECTION_RIGHT){
+				 direction=DIRECTION_LEFT;
+			 }
 		 }
 		 if (PORTE->ISFR & BUTTON_UP_MASK){
-		 	 if(direction == DIRECTION_RIGHT){
-		 		 direction_change=DIRECTION_RIGHT;
-		 	 }else if(direction == DIRECTION_LEFT){
-		 		direction_change = DIRECTION_LEFT;
-		 	 }
-		 	 direction=DIRECTION_UP;
+			 if(direction != DIRECTION_DOWN){
+				 direction=DIRECTION_UP;
+			 }
 		 }
 		 if (PORTE->ISFR & BUTTON_RIGHT_MASK){
-		 	 if(direction == DIRECTION_DOWN){
-		 		 direction_change=DIRECTION_DOWN;
-		 	 }else if(direction == DIRECTION_UP){
-		 		direction_change = DIRECTION_UP;
-		 	 }
-		 	 direction=DIRECTION_RIGHT;
+			 if(direction != DIRECTION_LEFT){
+				 direction=DIRECTION_RIGHT;
+			 }
 		 }
 		PORTE->ISFR = BUTTON_UP_MASK | BUTTON_LEFT_MASK | BUTTON_DOWN_MASK | BUTTON_RIGHT_MASK;
 
